@@ -18,19 +18,27 @@ func logCloser(c io.Closer) {
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	conn, err := stan.Connect(
 		"test-cluster",
 		"test-client",
 		stan.NatsURL("nats://localhost:4222"),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer logCloser(conn)
 
 	wg := &sync.WaitGroup{}
 
-	sub, err := conn.Subscribe("counter", func(msg *stan.Msg) {
+	var sub stan.Subscription
+
+	sub, err = conn.Subscribe("counter", func(msg *stan.Msg) {
 		// Add jitter..
 		time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
 
@@ -38,7 +46,9 @@ func main() {
 		// the ack will "succeed"
 		if rand.Float32() > 0.2 {
 			if err := msg.Ack(); err != nil {
-				log.Print("failed to ack")
+				log.Printf("failed to ack")
+				sub.Close()
+				return
 			}
 
 			fmt.Printf("seq = %d [redelivered = %v, acked = true]\n", msg.Sequence, msg.Redelivered)
@@ -48,7 +58,7 @@ func main() {
 		}
 	}, stan.SetManualAckMode(), stan.AckWait(time.Second))
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer logCloser(sub)
 
@@ -58,10 +68,12 @@ func main() {
 
 		err := conn.Publish("counter", nil)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 	}
 
 	// Wait until all messages have been processed.
 	wg.Wait()
+
+	return nil
 }

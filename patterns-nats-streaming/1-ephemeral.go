@@ -18,13 +18,19 @@ func logCloser(c io.Closer) {
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	conn, err := stan.Connect(
 		"test-cluster",
 		"test-client",
 		stan.NatsURL("nats://localhost:4222"),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer logCloser(conn)
 
@@ -41,7 +47,7 @@ func main() {
 		wg.Done()
 	})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer logCloser(sub)
 
@@ -51,10 +57,12 @@ func main() {
 
 		err := conn.Publish("counter", nil)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 	}
 
 	// Wait until all messages have been processed.
 	wg.Wait()
+
+	return nil
 }

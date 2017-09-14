@@ -44,18 +44,24 @@ func startSubscriber(conn stan.Conn, wg *sync.WaitGroup, n int, d chan<- struct{
 		}
 	}, stan.DurableName("i-will-remember"), stan.MaxInflight(1), stan.SetManualAckMode())
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
 	}
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	conn, err := stan.Connect(
 		"test-cluster",
 		"test-client",
 		stan.NatsURL("nats://localhost:4222"),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer logCloser(conn)
 
@@ -76,10 +82,12 @@ func main() {
 
 		err := conn.Publish("counter", nil)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 	}
 
 	// Wait until all messages have been processed.
 	wg.Wait()
+
+	return nil
 }
